@@ -1,0 +1,23 @@
+{
+  "name": "claude-wait-game",
+  "version": "0.1.0",
+  "description": "A companion window that pops up with fun mini-games while Claude Code is working on your request",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "install-hooks": "node scripts/install-hooks.js",
+    "uninstall-hooks": "node scripts/install-hooks.js --uninstall"
+  },
+  "keywords": [
+    "claude",
+    "claude-code",
+    "electron",
+    "games",
+    "snake",
+    "trivia"
+  ],
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^33.0.0"
+  }
+}

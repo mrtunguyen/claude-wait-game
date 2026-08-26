@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self'" />
+  <title>Claude Wait Game</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header id="status-bar" class="status idle">
+    <span id="status-dot" class="dot"></span>
+    <span id="status-text">Waiting for Claude…</span>
+    <span id="status-timer" class="timer"></span>
+  </header>
+
+  <main id="screen">
+    <!-- Game menu -->
+    <section id="menu" class="panel">
+      <h1>Pick a game while you wait</h1>
+      <div id="game-list" class="game-list"></div>
+
+      <details class="settings">
+        <summary>Settings</summary>
+        <label><input type="checkbox" id="opt-popupOnWorking" /> Pop up when Claude starts working</label>
+        <label><input type="checkbox" id="opt-alwaysOnTop" /> Keep window on top</label>
+        <label><input type="checkbox" id="opt-hideOnDone" /> Hide window when Claude finishes</label>
+        <label><input type="checkbox" id="opt-soundOnDone" /> Play a sound when Claude finishes</label>
+      </details>
+    </section>
+
+    <!-- Active game -->
+    <section id="game-view" class="panel hidden">
+      <div class="game-header">
+        <button id="back-btn" class="ghost">&larr; Games</button>
+        <span id="game-title"></span>
+        <span id="game-score"></span>
+      </div>
+      <div id="game-container"></div>
+    </section>
+  </main>
+
+  <div id="done-banner" class="done-banner hidden">
+    <div class="done-card">
+      <div class="done-emoji">&#10024;</div>
+      <div class="done-text">Claude is done!</div>
+      <div class="done-sub">Your response is ready in the terminal.</div>
+      <button id="done-dismiss">Keep playing</button>
+    </div>
+  </div>
+
+  <script src="games/snake.js"></script>
+  <script src="games/trivia.js"></script>
+  <script src="games/memory.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
