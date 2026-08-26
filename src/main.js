@@ -78,6 +78,22 @@ function popUp() {
   if (settings.alwaysOnTop) win.setAlwaysOnTop(true, 'floating');
 }
 
+// Boil a PreToolUse payload down to one short human-readable detail string.
+function summarizeToolInput(input) {
+  if (!input || typeof input !== 'object') return '';
+  const detail =
+    input.file_path ||
+    input.notebook_path ||
+    input.path ||
+    input.command ||
+    input.pattern ||
+    input.query ||
+    input.url ||
+    input.description ||
+    '';
+  return String(detail).slice(0, 120);
+}
+
 function handleClaudeEvent(event, body) {
   switch (event) {
     case 'working':
@@ -99,6 +115,15 @@ function handleClaudeEvent(event, body) {
       sendToRenderer('claude-status', { status: 'attention', ...body });
       if (win && !win.isDestroyed()) win.flashFrame(true);
       break;
+    case 'activity':
+      // Claude is about to run a tool — feed the live ticker.
+      sendToRenderer('claude-status', {
+        status: 'activity',
+        tool: body.tool,
+        detail: body.detail,
+        sessionId: body.sessionId
+      });
+      break;
     default:
       return false;
   }
@@ -114,10 +139,16 @@ function startHookServer() {
       res.end('not found');
       return;
     }
+    const LIMIT = 1024 * 1024; // Write/Edit tool payloads can be large
     let raw = '';
+    let truncated = false;
     req.on('data', (chunk) => {
+      if (truncated) return; // keep draining so 'end' still fires
       raw += chunk;
-      if (raw.length > 64 * 1024) req.destroy();
+      if (raw.length > LIMIT) {
+        truncated = true;
+        raw = '';
+      }
     });
     req.on('end', () => {
       let body = {};
@@ -129,7 +160,9 @@ function startHookServer() {
       const ok = handleClaudeEvent(match[1], {
         sessionId: body.session_id,
         message: body.message,
-        cwd: body.cwd
+        cwd: body.cwd,
+        tool: typeof body.tool_name === 'string' ? body.tool_name.slice(0, 60) : undefined,
+        detail: summarizeToolInput(body.tool_input)
       });
       res.writeHead(ok ? 200 : 400, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ ok }));

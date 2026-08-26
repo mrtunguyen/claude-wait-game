@@ -5,9 +5,11 @@ A little companion window for [Claude Code](https://claude.com/claude-code). Whe
 ```
 ┌────────────────────────────┐
 │ ● Claude is working…   42s │
+│ ✏️ Editing main.js         │
 ├────────────────────────────┤
 │   🐍 Snake    🧠 Trivia    │
 │   🃏 Memory Match          │
+│   📊 Your waiting stats    │
 └────────────────────────────┘
 ```
 
@@ -16,9 +18,10 @@ A little companion window for [Claude Code](https://claude.com/claude-code). Whe
 Claude Code supports [hooks](https://code.claude.com/docs/en/hooks) — shell commands that run on session events. This app:
 
 1. Runs a tiny HTTP server on `127.0.0.1:45872` (localhost only).
-2. Installs three hooks into `~/.claude/settings.json`:
+2. Installs four hooks into `~/.claude/settings.json`:
    - **UserPromptSubmit** → you sent a prompt → the game window pops up ("Claude is working…")
-   - **Stop** → Claude finished → chime + "Claude is done!" banner with elapsed time
+   - **PreToolUse** → Claude is about to use a tool → the **live activity ticker** updates ("✏️ Editing main.js", "💻 Running npm test…", "🔍 Searching for handleEvent…")
+   - **Stop** → Claude finished → chime + "Claude is done!" banner with elapsed time and tool-call count
    - **Notification** → Claude needs your attention (e.g. a permission prompt) → window flashes
 3. The hooks are `curl` one-liners with 1–2 s timeouts and `|| true`, so if the app isn't running they silently no-op and **never slow down or break your Claude session**.
 
@@ -57,6 +60,20 @@ npm run uninstall-hooks   # removes only its own hook entries, leaves the rest u
 | 🃏 **Memory Match** | Flip cards to find all 8 emoji pairs in as few moves as possible. |
 
 Best scores are saved locally per game.
+
+## Live activity ticker
+
+While Claude works, a ticker under the status bar shows what it's actually doing in real time — which file it's editing, what command it's running, what it's searching for. Tool inputs are summarized to a single short line (a file basename, a truncated command) and never leave your machine.
+
+## Waiting stats
+
+Open **📊 Your waiting stats** from the menu:
+
+- Time waited today and all time, number of waits, longest and average wait
+- Games played (with a per-game breakdown) and total tool calls watched
+- A bar chart of time waited over the last 7 days (hover a bar for the exact value)
+
+Each "Claude is done!" banner also shows how long that wait took and how many tool calls it involved. Stats live in local storage and daily history is kept for 60 days.
 
 ## Behavior & settings
 

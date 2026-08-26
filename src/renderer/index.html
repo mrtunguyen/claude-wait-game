@@ -12,12 +12,18 @@
     <span id="status-text">Waiting for Claude…</span>
     <span id="status-timer" class="timer"></span>
   </header>
+  <div id="ticker" class="ticker hidden">
+    <span id="ticker-icon"></span>
+    <span id="ticker-text"></span>
+  </div>
 
   <main id="screen">
     <!-- Game menu -->
     <section id="menu" class="panel">
       <h1>Pick a game while you wait</h1>
       <div id="game-list" class="game-list"></div>
+
+      <button id="stats-btn" class="stats-btn">&#128202; Your waiting stats</button>
 
       <details class="settings">
         <summary>Settings</summary>
@@ -37,6 +43,15 @@
       </div>
       <div id="game-container"></div>
     </section>
+
+    <!-- Stats -->
+    <section id="stats-view" class="panel hidden">
+      <div class="game-header">
+        <button id="stats-back-btn" class="ghost">&larr; Games</button>
+        <span class="view-title">&#128202; Waiting stats</span>
+      </div>
+      <div id="stats-content"></div>
+    </section>
   </main>
 
   <div id="done-banner" class="done-banner hidden">
@@ -48,6 +63,7 @@
     </div>
   </div>
 
+  <script src="stats.js"></script>
   <script src="games/snake.js"></script>
   <script src="games/trivia.js"></script>
   <script src="games/memory.js"></script>

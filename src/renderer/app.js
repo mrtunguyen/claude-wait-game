@@ -14,11 +14,20 @@
   const backBtn = document.getElementById('back-btn');
   const doneBanner = document.getElementById('done-banner');
   const doneDismiss = document.getElementById('done-dismiss');
+  const doneSub = document.querySelector('.done-sub');
+  const ticker = document.getElementById('ticker');
+  const tickerIcon = document.getElementById('ticker-icon');
+  const tickerText = document.getElementById('ticker-text');
+  const statsBtn = document.getElementById('stats-btn');
+  const statsView = document.getElementById('stats-view');
+  const statsContent = document.getElementById('stats-content');
+  const statsBackBtn = document.getElementById('stats-back-btn');
 
   let activeGame = null;
   let workingSince = null;
   let timerInterval = null;
   let settings = {};
+  let toolsThisWait = 0;
 
   // ---------- best scores ----------
   function bestKey(id) {
@@ -98,7 +107,9 @@
   function openGame(game) {
     closeGame();
     activeGame = game;
+    window.WaitStats.recordGame(game.id);
     menu.classList.add('hidden');
+    statsView.classList.add('hidden');
     gameView.classList.remove('hidden');
     gameTitle.textContent = game.icon + ' ' + game.name;
     gameScore.textContent = '';
@@ -121,6 +132,67 @@
   }
 
   backBtn.addEventListener('click', closeGame);
+
+  // ---------- stats view ----------
+  statsBtn.addEventListener('click', () => {
+    menu.classList.add('hidden');
+    gameView.classList.add('hidden');
+    statsView.classList.remove('hidden');
+    window.WaitStats.render(statsContent);
+  });
+
+  statsBackBtn.addEventListener('click', () => {
+    statsView.classList.add('hidden');
+    menu.classList.remove('hidden');
+  });
+
+  // ---------- activity ticker ----------
+  const TOOL_DISPLAY = {
+    Edit: ['✏️', 'Editing'],
+    MultiEdit: ['✏️', 'Editing'],
+    Write: ['✏️', 'Writing'],
+    NotebookEdit: ['✏️', 'Editing notebook'],
+    Read: ['\u{1F4D6}', 'Reading'],
+    Bash: ['\u{1F4BB}', 'Running'],
+    BashOutput: ['\u{1F4BB}', 'Checking output of'],
+    KillShell: ['\u{1F4BB}', 'Stopping'],
+    Grep: ['\u{1F50D}', 'Searching for'],
+    Glob: ['\u{1F50D}', 'Finding files'],
+    LS: ['\u{1F4C2}', 'Listing'],
+    WebFetch: ['\u{1F310}', 'Fetching'],
+    WebSearch: ['\u{1F310}', 'Searching the web for'],
+    Task: ['\u{1F916}', 'Delegating:'],
+    Agent: ['\u{1F916}', 'Delegating:'],
+    TodoWrite: ['\u{1F4DD}', 'Planning'],
+    Skill: ['\u{1F9E9}', 'Using skill']
+  };
+
+  function shortDetail(detail) {
+    if (!detail) return '';
+    let d = String(detail);
+    // for file paths, the basename is what the user recognizes
+    if (d.includes('/') && !d.includes(' ')) {
+      const parts = d.split('/').filter(Boolean);
+      if (parts.length > 0) d = parts[parts.length - 1];
+    }
+    return d.length > 60 ? d.slice(0, 57) + '…' : d;
+  }
+
+  function updateTicker(tool, detail) {
+    const [icon, verb] = TOOL_DISPLAY[tool] || ['⚙️', 'Using'];
+    tickerIcon.textContent = icon;
+    const d = shortDetail(detail);
+    tickerText.textContent = d ? `${verb} ${d}` : `${verb || 'Using'} ${tool || 'a tool'}`;
+    ticker.classList.remove('hidden');
+    // retrigger the slide-in animation
+    ticker.classList.remove('tick');
+    void ticker.offsetWidth;
+    ticker.classList.add('tick');
+  }
+
+  function hideTicker() {
+    ticker.classList.add('hidden');
+  }
 
   // ---------- status / timer ----------
   function fmtElapsed(ms) {
@@ -186,9 +258,39 @@
   window.waitGame.onClaudeStatus((payload) => {
     if (payload.status === 'working') {
       doneBanner.classList.add('hidden');
+      toolsThisWait = 0;
       setStatus('working');
+      tickerIcon.textContent = '\u{1F680}';
+      tickerText.textContent = 'Getting started…';
+      ticker.classList.remove('hidden');
+    } else if (payload.status === 'activity') {
+      // the app may have been started mid-session; a tool call means Claude is working
+      if (!workingSince) {
+        doneBanner.classList.add('hidden');
+        toolsThisWait = 0;
+        setStatus('working');
+      }
+      toolsThisWait += 1;
+      updateTicker(payload.tool, payload.detail);
     } else if (payload.status === 'done') {
+      const elapsed = workingSince ? Date.now() - workingSince : 0;
       setStatus('done');
+      hideTicker();
+      if (elapsed > 0) {
+        window.WaitStats.recordWait(elapsed);
+        window.WaitStats.recordTools(toolsThisWait);
+        doneSub.textContent =
+          `Took ${window.WaitStats.fmtDuration(elapsed)}` +
+          (toolsThisWait > 0 ? ` · ${toolsThisWait} tool call${toolsThisWait === 1 ? '' : 's'}` : '') +
+          ' — your response is ready in the terminal.';
+      } else {
+        doneSub.textContent = 'Your response is ready in the terminal.';
+      }
+      toolsThisWait = 0;
+      // live-refresh the stats screen if it's open
+      if (!statsView.classList.contains('hidden')) {
+        window.WaitStats.render(statsContent);
+      }
       chime();
       showDoneBanner();
     } else if (payload.status === 'attention') {

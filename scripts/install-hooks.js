@@ -2,10 +2,11 @@
 /**
  * Installs (or removes) the Claude Code hooks that drive the wait-game window.
  *
- * Adds three hooks to ~/.claude/settings.json:
+ * Adds four hooks to ~/.claude/settings.json:
  *   - UserPromptSubmit -> POST /event/working  (you sent a prompt, Claude starts working)
  *   - Stop             -> POST /event/done     (Claude finished responding)
  *   - Notification     -> POST /event/notification (Claude needs attention/permission)
+ *   - PreToolUse       -> POST /event/activity (Claude is about to use a tool — drives the live ticker)
  *
  * The hooks are plain curl calls to the app's local server (127.0.0.1:45872 by
  * default) and fail silently when the app isn't running, so they never slow
@@ -90,7 +91,8 @@ function main() {
   const events = {
     UserPromptSubmit: 'working',
     Stop: 'done',
-    Notification: 'notification'
+    Notification: 'notification',
+    PreToolUse: 'activity'
   };
 
   for (const [hookName, appEvent] of Object.entries(events)) {
