@@ -1,7 +1,7 @@
 {
   "name": "claude-wait-game",
   "productName": "Claude Wait Game",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "A companion window that pops up with fun mini-games while Claude Code is working on your request",
   "main": "src/main.js",
   "author": "mrtunguyen",

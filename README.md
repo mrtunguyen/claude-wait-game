@@ -26,9 +26,39 @@ Grab the latest installer from the [**Releases page**](https://github.com/mrtung
 
 Open the app, then click **Connect to Claude Code** on the main screen — that writes the hooks for you, so there's no terminal setup. Restart any open Claude Code sessions afterwards and you're done.
 
-> **Unsigned builds.** The releases aren't code-signed, so your OS warns on first launch.
-> On macOS: right-click the app → **Open** → **Open** (or `xattr -cr "/Applications/Claude Wait Game.app"`).
-> On Windows: SmartScreen → **More info** → **Run anyway**.
+### The OS blocks it on first launch
+
+The releases aren't code-signed, so macOS and Windows both warn (and Windows sometimes
+blocks outright). Nothing is wrong with the download — signing certificates cost money and
+this project doesn't have one yet.
+
+**Windows**
+
+1. On *"Windows protected your PC"*: click the small **More info** link, then **Run anyway**.
+2. No **Run anyway** button? The file is flagged as downloaded from the internet. Clear that
+   flag and try again:
+   ```powershell
+   Unblock-File "$HOME\Downloads\Claude.Wait.Game.Setup.1.0.1.exe"
+   ```
+   (Or right-click the `.exe` → **Properties** → tick **Unblock** → **OK**.)
+3. Still blocked? Your organization may enforce SmartScreen/WDAC/AppLocker, which you can't
+   override. [Run from source](#run-from-source) instead — no unsigned executable involved.
+
+Verify the download matches what the release workflow built:
+
+```powershell
+Get-FileHash "$HOME\Downloads\Claude.Wait.Game.Setup.1.0.1.exe" -Algorithm SHA256
+```
+
+Compare it against the digest GitHub shows for that asset on the release page.
+
+**macOS**
+
+Right-click the app → **Open** → **Open**. If it's still blocked:
+
+```bash
+xattr -cr "/Applications/Claude Wait Game.app"
+```
 
 ## How it works
 
