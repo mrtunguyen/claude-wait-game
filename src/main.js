@@ -2,6 +2,7 @@ const { app, BrowserWindow, Tray, Menu, ipcMain, nativeImage } = require('electr
 const http = require('http');
 const path = require('path');
 const fs = require('fs');
+const hooks = require('./hooks');
 
 const PORT = parseInt(process.env.CLAUDE_WAIT_GAME_PORT || '45872', 10);
 const HOST = '127.0.0.1';
@@ -237,6 +238,12 @@ if (!gotLock) {
       saveSettings();
       return settings;
     });
+    // Hook management from the app's Settings screen — so people who install
+    // from a release never need the repo or a terminal to connect to Claude Code.
+    ipcMain.handle('hooks-status', () => hooks.status());
+    ipcMain.handle('hooks-install', () => hooks.apply({ port: PORT }));
+    ipcMain.handle('hooks-uninstall', () => hooks.apply({ port: PORT, uninstall: true }));
+
     ipcMain.on('stop-flash', () => {
       if (win && !win.isDestroyed()) win.flashFrame(false);
     });

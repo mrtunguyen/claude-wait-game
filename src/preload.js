@@ -8,5 +8,8 @@ contextBridge.exposeInMainWorld('waitGame', {
   },
   getSettings: () => ipcRenderer.invoke('get-settings'),
   setSetting: (key, value) => ipcRenderer.invoke('set-setting', key, value),
-  stopFlash: () => ipcRenderer.send('stop-flash')
+  stopFlash: () => ipcRenderer.send('stop-flash'),
+  hooksStatus: () => ipcRenderer.invoke('hooks-status'),
+  hooksInstall: () => ipcRenderer.invoke('hooks-install'),
+  hooksUninstall: () => ipcRenderer.invoke('hooks-uninstall')
 });

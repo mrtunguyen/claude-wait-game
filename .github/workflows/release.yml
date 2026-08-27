@@ -1,0 +1,179 @@
+name: Release
+
+# Tag a version to ship it:  git tag v1.0.0 && git push origin v1.0.0
+# Or run this workflow manually from the Actions tab with a version number.
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release, e.g. 1.0.1 (a v-tag is created for you)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm test
+
+  build:
+    name: Build ${{ matrix.name }}
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            name: macOS
+            build: npm run dist:mac
+          - os: windows-latest
+            name: Windows
+            build: npm run dist:win
+          - os: ubuntu-22.04
+            name: Linux
+            build: npm run dist:linux
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Resolve version
+        id: version
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ inputs.version }}"
+          else
+            VERSION="${GITHUB_REF_NAME#v}"
+          fi
+          VERSION="${VERSION#v}"
+          if ! printf '%s' "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.-]+)?$'; then
+            echo "::error::'$VERSION' is not a valid semver version"
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Building version $VERSION"
+
+      - run: npm ci
+
+      # Keep the packaged app's version in step with the tag being released.
+      - name: Sync package version
+        shell: bash
+        run: npm version "${{ steps.version.outputs.version }}" --no-git-tag-version --allow-same-version
+
+      - name: Build installers
+        run: ${{ matrix.build }}
+        env:
+          # Unsigned builds — skip signing/notarization rather than failing.
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+
+      - name: Collect installers
+        shell: bash
+        run: |
+          mkdir -p out
+          # only the user-facing artifacts, not electron-builder's intermediates
+          find dist -maxdepth 1 -type f \
+            \( -name '*.dmg' -o -name '*.zip' -o -name '*.exe' \
+               -o -name '*.AppImage' -o -name '*.deb' -o -name 'latest*.yml' \) \
+            -exec cp {} out/ \;
+          ls -lh out
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: installers-${{ matrix.name }}
+          path: out/*
+          if-no-files-found: error
+          retention-days: 7
+
+  release:
+    name: Publish release
+    needs: build
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          pattern: installers-*
+          merge-multiple: true
+
+      - name: Resolve version
+        id: version
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ inputs.version }}"
+          else
+            VERSION="${GITHUB_REF_NAME#v}"
+          fi
+          VERSION="${VERSION#v}"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: List artifacts
+        run: ls -lh artifacts
+
+      - name: Write release notes
+        shell: bash
+        run: |
+          cat > notes.md <<'EOF'
+          ## Install
+
+          | Platform | Download |
+          |---|---|
+          | **macOS** (Apple silicon) | `.dmg` with `arm64` in the name |
+          | **macOS** (Intel) | `.dmg` with `x64` in the name |
+          | **Windows** | `...Setup...exe` (installer) or the portable `.exe` |
+          | **Linux** | `.AppImage` (run it) or `.deb` (`sudo dpkg -i ...`) |
+
+          After installing, open **Claude Wait Game** and click **Connect to Claude Code** on the
+          main screen. That adds the hooks to `~/.claude/settings.json` (backed up first), so no
+          terminal setup is needed. Restart any open Claude Code sessions afterwards.
+
+          ### Note on unsigned builds
+
+          These builds aren't code-signed, so your OS will warn on first launch:
+
+          - **macOS**: right-click the app → **Open** → **Open**. If it's still blocked, run
+            `xattr -cr "/Applications/Claude Wait Game.app"`.
+          - **Windows**: SmartScreen → **More info** → **Run anyway**.
+          EOF
+
+      - name: Create or update the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          TAG="${{ steps.version.outputs.tag }}"
+          # workflow_dispatch has no tag yet — create one at this commit
+          if ! git rev-parse "$TAG" >/dev/null 2>&1; then
+            git tag "$TAG"
+            git push origin "$TAG"
+          fi
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" artifacts/* --clobber
+            gh release edit "$TAG" --notes-file notes.md --latest
+          else
+            gh release create "$TAG" artifacts/* \
+              --title "Claude Wait Game ${{ steps.version.outputs.version }}" \
+              --notes-file notes.md \
+              --latest
+          fi

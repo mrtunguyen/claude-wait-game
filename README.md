@@ -13,6 +13,23 @@ A little companion window for [Claude Code](https://claude.com/claude-code). Whe
 └────────────────────────────┘
 ```
 
+## Download
+
+Grab the latest installer from the [**Releases page**](https://github.com/mrtunguyen/claude-wait-game/releases/latest):
+
+| Platform | File |
+|---|---|
+| macOS (Apple silicon) | `.dmg` with `arm64` in the name |
+| macOS (Intel) | `.dmg` with `x64` in the name |
+| Windows | `...Setup....exe` (installer) or the portable `.exe` |
+| Linux | `.AppImage` (make it executable and run) or `.deb` (`sudo dpkg -i ...`) |
+
+Open the app, then click **Connect to Claude Code** on the main screen — that writes the hooks for you, so there's no terminal setup. Restart any open Claude Code sessions afterwards and you're done.
+
+> **Unsigned builds.** The releases aren't code-signed, so your OS warns on first launch.
+> On macOS: right-click the app → **Open** → **Open** (or `xattr -cr "/Applications/Claude Wait Game.app"`).
+> On Windows: SmartScreen → **More info** → **Run anyway**.
+
 ## How it works
 
 Claude Code supports [hooks](https://code.claude.com/docs/en/hooks) — shell commands that run on session events. This app:
@@ -27,7 +44,7 @@ Claude Code supports [hooks](https://code.claude.com/docs/en/hooks) — shell co
 
 Because it hooks Claude Code itself, it works whether you run `claude` in a plain terminal, in the desktop app's terminal, or in an IDE terminal.
 
-## Setup
+## Run from source
 
 Requires Node.js 18+ and `curl` (preinstalled on macOS, Linux, and Windows 10+). The generated hook commands use POSIX shell syntax, so on Windows run Claude Code under WSL or Git Bash.
 
@@ -43,13 +60,36 @@ npm run install-hooks
 npm start
 ```
 
-Restart any running Claude Code sessions so they pick up the hooks, then send Claude a prompt — the window pops up on its own.
+Restart any running Claude Code sessions so they pick up the hooks, then send Claude a prompt — the window pops up on its own. (The in-app **Connect to Claude Code** button does the same thing as `npm run install-hooks`.)
 
-### Uninstall
+### Uninstall the hooks
 
 ```bash
 npm run uninstall-hooks   # removes only its own hook entries, leaves the rest untouched
 ```
+
+Or click **Disconnect** in the app.
+
+## Building and releasing
+
+```bash
+npm test          # dependency-free test suite (hooks, hook server, stats)
+npm run dist      # build installers for the current platform into dist/
+```
+
+Releases are automated. Pushing a version tag builds macOS, Windows, and Linux
+installers on GitHub Actions and publishes them to a GitHub Release:
+
+```bash
+git tag v1.0.1
+git push origin v1.0.1
+```
+
+You can also trigger the **Release** workflow manually from the Actions tab and give it a
+version number — it creates the tag for you. Tests must pass before anything is built, and
+every push runs CI on all three platforms.
+
+The app icon is generated (no binary asset checked in by hand): `npm run make-icon`.
 
 ## The games
 

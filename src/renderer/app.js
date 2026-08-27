@@ -22,6 +22,10 @@
   const statsView = document.getElementById('stats-view');
   const statsContent = document.getElementById('stats-content');
   const statsBackBtn = document.getElementById('stats-back-btn');
+  const setup = document.getElementById('setup');
+  const setupStatus = document.getElementById('setup-status');
+  const setupBtn = document.getElementById('setup-btn');
+  const setupNote = document.getElementById('setup-note');
 
   let activeGame = null;
   let workingSince = null;
@@ -299,6 +303,68 @@
     }
   });
 
+  // ---------- Claude Code connection (hooks) ----------
+  // Lets people who installed from a release wire the app into Claude Code
+  // without cloning the repo or touching a terminal.
+  let hooksBusy = false;
+
+  async function refreshSetup() {
+    if (!window.waitGame.hooksStatus) return; // older preload
+    let st;
+    try {
+      st = await window.waitGame.hooksStatus();
+    } catch {
+      return;
+    }
+    setup.classList.remove('hidden');
+    setup.classList.toggle('connected', !!st.installed);
+
+    if (st.error) {
+      setupStatus.textContent = '\u26A0\uFE0F Could not read Claude settings';
+      setupBtn.textContent = 'Retry';
+      setupNote.textContent = st.error;
+      return;
+    }
+
+    if (st.installed) {
+      setupStatus.textContent = '\u2705 Connected to Claude Code';
+      setupBtn.textContent = 'Disconnect';
+      setupNote.textContent = st.settingsPath;
+    } else {
+      setupStatus.textContent = st.partial
+        ? '\u26A0\uFE0F Partly connected'
+        : '\u26A1 Not connected yet';
+      setupBtn.textContent = st.partial ? 'Repair connection' : 'Connect to Claude Code';
+      setupNote.textContent = st.partial
+        ? 'Some hooks are missing — repair to reinstall all four.'
+        : 'Adds hooks to your Claude settings so this window pops up while Claude works.';
+    }
+  }
+
+  setupBtn.addEventListener('click', async () => {
+    if (hooksBusy) return;
+    hooksBusy = true;
+    const disconnecting = setupBtn.textContent === 'Disconnect';
+    setupBtn.disabled = true;
+    setupBtn.textContent = disconnecting ? 'Disconnecting…' : 'Connecting…';
+    try {
+      const res = disconnecting
+        ? await window.waitGame.hooksUninstall()
+        : await window.waitGame.hooksInstall();
+      await refreshSetup();
+      if (!res.ok) {
+        setupNote.textContent = res.error || 'Something went wrong.';
+      } else if (!disconnecting) {
+        setupNote.textContent = 'Done — restart any open Claude Code sessions to activate.';
+      }
+    } catch (err) {
+      setupNote.textContent = String(err && err.message ? err.message : err);
+    } finally {
+      setupBtn.disabled = false;
+      hooksBusy = false;
+    }
+  });
+
   // ---------- settings ----------
   const optIds = ['popupOnWorking', 'alwaysOnTop', 'hideOnDone', 'soundOnDone'];
 
@@ -318,4 +384,5 @@
   renderMenu();
   setStatus('idle');
   initSettings();
+  refreshSetup();
 })();
