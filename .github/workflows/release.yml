@@ -163,10 +163,13 @@ jobs:
         shell: bash
         run: |
           TAG="${{ steps.version.outputs.tag }}"
-          # workflow_dispatch has no tag yet — create one at this commit
-          if ! git rev-parse "$TAG" >/dev/null 2>&1; then
+          # workflow_dispatch has no tag yet — create one at this commit.
+          # Check the remote, not the local clone: checkout@v4 fetches no tags.
+          if [ -z "$(git ls-remote --tags origin "refs/tags/$TAG")" ]; then
             git tag "$TAG"
-            git push origin "$TAG"
+            git push origin "refs/tags/$TAG"
+          else
+            echo "Tag $TAG already exists on the remote — reusing it."
           fi
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" artifacts/* --clobber
