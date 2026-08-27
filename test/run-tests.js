@@ -94,6 +94,58 @@ function tmpFile(contents) {
     assert.strictEqual(hooks.status({ settingsPath: p }).installed, false);
   });
 
+  await test('generates POSIX shell-form hooks on macOS/Linux', () => {
+    const p = tmpFile('{}');
+    hooks.apply({ settingsPath: p, platform: 'darwin' });
+    const s = JSON.parse(fs.readFileSync(p, 'utf8'));
+    const h = s.hooks.UserPromptSubmit[0].hooks[0];
+    assert.strictEqual(h.type, 'command');
+    assert.ok(!('args' in h), 'POSIX hooks use shell form, not exec form');
+    assert.match(h.command, /^curl /);
+    assert.match(h.command, /event\/working/);
+    assert.ok(h.command.includes('>/dev/null 2>&1 || true'), 'must silence output and never fail');
+  });
+
+  await test('generates shell-independent exec-form hooks on Windows', () => {
+    const p = tmpFile('{}');
+    hooks.apply({ settingsPath: p, platform: 'win32' });
+    const s = JSON.parse(fs.readFileSync(p, 'utf8'));
+    for (const [name, event] of Object.entries(hooks.EVENTS)) {
+      const h = s.hooks[name][0].hooks[0];
+      assert.strictEqual(h.command, 'cmd.exe', `${name} must not depend on the shell`);
+      assert.ok(Array.isArray(h.args) && h.args[0] === '/c', `${name} must use exec form`);
+      const line = h.args[1];
+      assert.ok(line.includes(`/event/${event}`), `${name} posts to the wrong endpoint`);
+      // POSIX-only syntax here would break under PowerShell
+      assert.ok(!line.includes('/dev/null'), 'no POSIX device path');
+      assert.ok(!line.includes('|| true'), 'no POSIX-only || true');
+      assert.ok(line.includes('>NUL 2>&1'), 'response body must be discarded');
+      assert.ok(line.includes('exit /b 0'), 'a closed app must not surface a hook error');
+    }
+  });
+
+  await test('detects and removes Windows hooks it wrote', () => {
+    const p = tmpFile('{}');
+    hooks.apply({ settingsPath: p, port: 45872, platform: 'win32' });
+    const st = hooks.status({ settingsPath: p });
+    assert.strictEqual(st.installed, true, 'exec-form hooks must be recognized');
+    assert.strictEqual(st.port, 45872, 'port must be read from exec-form args');
+    hooks.apply({ settingsPath: p, uninstall: true, platform: 'win32' });
+    assert.strictEqual(hooks.status({ settingsPath: p }).installed, false);
+  });
+
+  await test('reinstalling across platforms leaves exactly one hook each', () => {
+    // e.g. hooks written by the CLI under WSL, then repaired from the Windows app
+    const p = tmpFile('{}');
+    hooks.apply({ settingsPath: p, platform: 'linux' });
+    hooks.apply({ settingsPath: p, platform: 'win32' });
+    const s = JSON.parse(fs.readFileSync(p, 'utf8'));
+    for (const name of Object.keys(hooks.EVENTS)) {
+      assert.strictEqual(s.hooks[name].length, 1, `${name} duplicated across platforms`);
+      assert.strictEqual(s.hooks[name][0].hooks[0].command, 'cmd.exe');
+    }
+  });
+
   await test('reports a custom port', () => {
     const p = tmpFile('{}');
     hooks.apply({ settingsPath: p, port: 50123 });

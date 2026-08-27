@@ -23,21 +23,59 @@ function defaultSettingsPath() {
   return path.join(os.homedir(), '.claude', 'settings.json');
 }
 
+function endpoint(port, event) {
+  return `http://127.0.0.1:${port}/event/${event}`;
+}
+
 function hookCommand(port, event) {
   // --data-binary @- forwards Claude's hook JSON (session_id, tool_name, ...)
   // to the app. `|| true` + short timeouts: never block Claude if the app is closed.
+  // Output is discarded: UserPromptSubmit adds a hook's stdout to Claude's context.
   return (
     `curl -s -m 2 --connect-timeout 1 -X POST -H "Content-Type: application/json" ` +
-    `--data-binary @- http://127.0.0.1:${port}/event/${event} >/dev/null 2>&1 || true` +
+    `--data-binary @- ${endpoint(port, event)} >/dev/null 2>&1 || true` +
     ` # ${MARKER}`
   );
+}
+
+/**
+ * One hook entry for an event, in a form the platform's Claude Code can run.
+ *
+ * On Windows, Claude Code runs shell-form hooks through Git Bash when it is
+ * installed and PowerShell otherwise — and the POSIX command above is invalid
+ * PowerShell, so it would silently never fire. Exec form (command + args)
+ * bypasses the shell entirely, so it behaves the same either way. cmd.exe is
+ * always present; `>NUL 2>&1` discards the response body and `exit /b 0` keeps
+ * a closed app from surfacing a hook error on every prompt.
+ */
+function hookEntry(port, event, platform = process.platform) {
+  if (platform === 'win32') {
+    return {
+      type: 'command',
+      command: 'cmd.exe',
+      args: [
+        '/c',
+        `curl.exe -s -m 2 --connect-timeout 1 -X POST -H "Content-Type: application/json" ` +
+          `--data-binary @- ${endpoint(port, event)} >NUL 2>&1 & exit /b 0 & REM ${MARKER}`
+      ]
+    };
+  }
+  return { type: 'command', command: hookCommand(port, event) };
+}
+
+// Our own entries carry the marker in the command (POSIX) or in the args
+// (Windows exec form), so look at the whole hook object.
+function hookText(h) {
+  if (!h || typeof h !== 'object') return '';
+  const args = Array.isArray(h.args) ? h.args.filter((a) => typeof a === 'string').join(' ') : '';
+  return `${typeof h.command === 'string' ? h.command : ''} ${args}`;
 }
 
 function isOurs(entry) {
   return (
     entry &&
     Array.isArray(entry.hooks) &&
-    entry.hooks.some((h) => typeof h.command === 'string' && h.command.includes(MARKER))
+    entry.hooks.some((h) => hookText(h).includes(MARKER))
   );
 }
 
@@ -66,8 +104,8 @@ function status({ settingsPath = defaultSettingsPath() } = {}) {
       if (!Array.isArray(list)) continue;
       for (const entry of list) {
         if (!isOurs(entry)) continue;
-        const cmd = entry.hooks.find((h) => h.command && h.command.includes(MARKER)).command;
-        const m = /127\.0\.0\.1:(\d+)\//.exec(cmd);
+        const text = entry.hooks.map(hookText).find((t) => t.includes(MARKER)) || '';
+        const m = /127\.0\.0\.1:(\d+)\//.exec(text);
         if (m) port = parseInt(m[1], 10);
       }
     }
@@ -87,7 +125,12 @@ function status({ settingsPath = defaultSettingsPath() } = {}) {
  * Install or remove our hook entries, leaving every other hook untouched.
  * Returns { ok, settingsPath, backedUp, error }.
  */
-function apply({ port = 45872, settingsPath = defaultSettingsPath(), uninstall = false } = {}) {
+function apply({
+  port = 45872,
+  settingsPath = defaultSettingsPath(),
+  uninstall = false,
+  platform = process.platform
+} = {}) {
   let settings;
   let backedUp = false;
 
@@ -118,7 +161,7 @@ function apply({ port = 45872, settingsPath = defaultSettingsPath(), uninstall =
       const kept = list.filter((entry) => !isOurs(entry));
 
       if (!uninstall) {
-        kept.push({ hooks: [{ type: 'command', command: hookCommand(port, appEvent) }] });
+        kept.push({ hooks: [hookEntry(port, appEvent, platform)] });
       }
 
       if (kept.length > 0) settings.hooks[hookName] = kept;
@@ -134,4 +177,4 @@ function apply({ port = 45872, settingsPath = defaultSettingsPath(), uninstall =
   }
 }
 
-module.exports = { MARKER, EVENTS, defaultSettingsPath, hookCommand, status, apply };
+module.exports = { MARKER, EVENTS, defaultSettingsPath, hookCommand, hookEntry, status, apply };

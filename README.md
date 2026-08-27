@@ -40,13 +40,18 @@ Claude Code supports [hooks](https://code.claude.com/docs/en/hooks) — shell co
    - **PreToolUse** → Claude is about to use a tool → the **live activity ticker** updates ("✏️ Editing main.js", "💻 Running npm test…", "🔍 Searching for handleEvent…")
    - **Stop** → Claude finished → chime + "Claude is done!" banner with elapsed time and tool-call count
    - **Notification** → Claude needs your attention (e.g. a permission prompt) → window flashes
-3. The hooks are `curl` one-liners with 1–2 s timeouts and `|| true`, so if the app isn't running they silently no-op and **never slow down or break your Claude session**.
+3. The hooks are `curl` calls with 1–2 s timeouts that discard their output, so if the app isn't running they silently no-op and **never slow down or break your Claude session**.
+
+On macOS and Linux these are shell one-liners. On Windows they're written in Claude Code's
+*exec form* (`cmd.exe /c ...`), which bypasses the shell — Claude Code otherwise runs hooks
+through Git Bash when it's installed and PowerShell when it isn't, and a POSIX one-liner is
+not valid PowerShell. Either way the app installs the right form for your machine.
 
 Because it hooks Claude Code itself, it works whether you run `claude` in a plain terminal, in the desktop app's terminal, or in an IDE terminal.
 
 ## Run from source
 
-Requires Node.js 18+ and `curl` (preinstalled on macOS, Linux, and Windows 10+). The generated hook commands use POSIX shell syntax, so on Windows run Claude Code under WSL or Git Bash.
+Requires Node.js 18+ and `curl` (preinstalled on macOS, Linux, and Windows 10+).
 
 ```bash
 git clone https://github.com/mrtunguyen/claude-wait-game.git
@@ -130,6 +135,18 @@ Closing the window minimizes the app to the tray so hooks can still wake it; qui
 
 - **Port**: set `CLAUDE_WAIT_GAME_PORT` when launching the app, and install hooks with the same port: `node scripts/install-hooks.js --port 50000`.
 - **Project-level hooks**: install into a specific project instead of globally with `node scripts/install-hooks.js --settings /path/to/project/.claude/settings.json`.
+
+### Running Claude Code inside WSL
+
+If the app runs on Windows but you use `claude` inside WSL, the two don't share a home
+directory *or* a loopback address, so the in-app button can't wire them together:
+
+- Install the hooks from **inside WSL** (`npm run install-hooks`), so they land in WSL's
+  `~/.claude/settings.json`.
+- WSL2 can't reach the Windows host on `127.0.0.1` unless you're on Windows 11 with
+  [mirrored networking](https://learn.microsoft.com/windows/wsl/networking#mirrored-mode-networking)
+  (`networkingMode=mirrored` in `.wslconfig`). Without it, point the hooks at the Windows
+  host IP instead — or just run the app inside WSL too.
 
 ## Security notes
 
